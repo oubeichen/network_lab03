@@ -1,6 +1,6 @@
 all: client server
 	gcc -o client client.o
-	gcc -o server server.o
+	gcc -o server server.o -lpthread
 test:client.o
 	gcc -o client client.o
 	clear
@@ -10,7 +10,7 @@ cli: client.o
 	clear
 	@./client
 srv: server.o
-	gcc -o server server.o
+	gcc -o server server.o -lpthread
 	clear
 	@./server
 client: client.c
