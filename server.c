@@ -20,13 +20,19 @@ int usernum;
 
 struct users{
 	pthread_t thread;
-	unsigned char name[20];
+	unsigned char name[MSG_MAX_NAME_LENGTH + 1];
 	unsigned char used;//whether this thread is used or not
 }users[MAX_ONLINE + 1];//one for sending error message.
 
+struct thread_data{
+	int connfd;
+	int threadnum;
+};
+
 void *user_work(void *arg)
 {
-	int connfd = (int)arg, length;
+	struct thread_data *mydata = (struct thread_data *)arg;
+	int connfd = mydata->connfd, threadnum = mydata->threadnum, length;
 	unsigned char recvline[MAXLINE],sendline[MAXLINE];
 	struct msg_client_to_server *msg_recv;
 	struct msg_server_to_client *msg_send;
@@ -38,22 +44,35 @@ void *user_work(void *arg)
 		msg_send = (struct msg_server_to_client *)sendline;
 		//test begin
 		msg_send->flags = MSG_ANNOUNCE;
-		sprintf(msg_send->content, "%s is accepted, connfd = %d.", msg_recv->name, connfd);
+		//need lock
+		sprintf(msg_send->content, "%s is accepted, your prev name is %s, connfd = %d, threadnum is %d", msg_recv->name, users[threadnum].name, connfd, threadnum);
+		strncpy(users[threadnum].name, msg_recv->name, MSG_MAX_NAME_LENGTH);
+		//need unlock
 		send(connfd, msg_send, length, 0);
 		//testend
 	}
 	//close socket of the server
 	close(connfd);
-	
+	//need lock
+	memset(users[threadnum].name, 0, MSG_MAX_NAME_LENGTH);
+	users[threadnum].used = USER_UNUSED;
+	//need unlock
+
 	pthread_exit(NULL);
 }
 
 int main(int argc, char **argv)
 {
+	pthread_attr_t attr;
 	int listenfd, connfd, rc;
 	int i;
 	socklen_t clilen;
 	struct sockaddr_in cliaddr, servaddr;
+	struct thread_data thread_dt[MAX_ONLINE + 1];
+
+	/*Initialize and set thread detached attribute */
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
 	//Create a socket for the soclet
 	//If sockfd<0 there was error in the creation of the socket
@@ -83,10 +102,9 @@ int main(int argc, char **argv)
 		
 		if(usernum < MAX_ONLINE){
 			for(i = 0;i <= MAX_ONLINE && users[i].used != USER_UNUSED;i++);//find the first unused thread
-			pthread_attr_t attr;
-			pthread_attr_init(&attr);
-			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-			rc = pthread_create(&(users[usernum].thread), &attr, user_work, (void *)connfd);
+			thread_dt[i].connfd = connfd;
+			thread_dt[i].threadnum = i;
+			rc = pthread_create(&(users[i].thread), &attr, user_work, (void *)&thread_dt[i]);
 			if(rc){
 				printf("ERROR: return code from pthread_create() is %d\n", rc);
 			}else{
