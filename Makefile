@@ -1,12 +1,12 @@
 all: client server
-	gcc -o client client.o
+	gcc -o client client.o -lpthread
 	gcc -o server server.o -lpthread
 test:client.o
-	gcc -o client client.o
+	gcc -o client client.o -lpthread
 	clear
 	@./client 127.0.0.1
 cli: client.o
-	gcc -o client client.o
+	gcc -o client client.o -lpthread
 	clear
 	@./client
 srv: server.o
