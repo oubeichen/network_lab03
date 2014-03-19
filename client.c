@@ -5,19 +5,37 @@
 #include<netinet/in.h>
 #include<string.h>
 #include<time.h>
+#include<pthread.h>
 
 #include"message.h"
 
 #define MAXLINE 4096 /*max text line length*/
 #define SERV_PORT 6566 /*server port*/
 
+void *recv_print(void *arg)
+{
+    unsigned char recvline[MAXLINE];
+    struct msg_server_to_client *msg_recv;
+    int sockfd = (int)arg;
+    while(1)
+    {
+        if(recv(sockfd, recvline, MAXLINE, 0) == 0){
+            perror("The server terminated prematurely.\n");
+            exit(3);
+        }
+        msg_recv = (struct msg_server_to_client *)recvline;
+        printf("Received a line from server: %s\n", msg_recv->content);
+    }
+    pthread_exit(NULL);
+} 
+
 int main(int argc, char **argv)
 {
+    pthread_t recv_thread;
     int sockfd;
     struct sockaddr_in servaddr;
-    unsigned char sendline[MAXLINE],recvline[MAXLINE],buf[MAXLINE],name[MSG_MAX_NAME_LENGTH + 1];
+    unsigned char sendline[MAXLINE],buf[MAXLINE],name[MSG_MAX_NAME_LENGTH + 1];
     struct msg_client_to_server *msg_send;
-    struct msg_server_to_client *msg_recv;
 
     srand((unsigned)time(NULL));//generate a random seed
 
@@ -56,22 +74,26 @@ int main(int argc, char **argv)
         fgets(buf, MAXLINE, stdin);
         if(buf[strlen(buf) - 1] == '\n')
             buf[strlen(buf) - 1] = '\0';
-        strncpy(name, buf, MSG_MAX_NAME_LENGTH);
-        printf("Your name is:%s \n", name);
+        strncpy(name, buf, MSG_MAX_NAME_LENGTH + 1);
         if(strlen(name) == 0){
             sprintf(name, "user%d", rand());
         }
+        printf("Your name is:%s \n", name);
         msg_send = (struct msg_client_to_server *)sendline;
         msg_send->flags = 4;//login
-        strncpy(msg_send->name, name, MSG_MAX_NAME_LENGTH);
+        strncpy(msg_send->name, name, MSG_MAX_NAME_LENGTH + 1);
         strncpy(msg_send->content, "Login message.", MSG_MAX_NAME_LENGTH);
         send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
-        if(recv(sockfd, recvline, MAXLINE, 0) == 0){
-            perror("The server terminated prematurely.\n");
-            exit(3);
+
+        pthread_create(&recv_thread, NULL, recv_print, (void *)sockfd);
+        while(1)//chat loop
+        {
+            fgets(buf, MAXLINE, stdin);
+            printf("list\n");
+            memset(sendline, 0, MAXLINE);
+            msg_send->flags = MSG_LIST;
+            send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
-        msg_recv = (struct msg_server_to_client *)recvline;
-        printf("Received a line from server: %s\n", msg_recv->content);
     }
     exit(0);
 }

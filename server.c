@@ -12,7 +12,6 @@
 #define MAXLINE 4096 /*max text line length*/
 #define SERV_PORT 6566 /*port*/
 #define LISTENNQ 8 /*maximum number of client connections*/
-#define MAX_ONLINE 255 /*maximum number of online clients*/
 
 #define USER_UNUSED 0
 #define USER_USED 1
@@ -43,14 +42,33 @@ void *user_work(void *arg)
         msg_recv = (struct msg_client_to_server *)recvline;
         msg_send = (struct msg_server_to_client *)sendline;
         if(msg_recv->flags == MSG_LOGIN){
-            //test begin
             msg_send->flags = MSG_ANNOUNCE;
             //need lock
-            strncpy(users[threadnum].name, msg_recv->name, MSG_MAX_NAME_LENGTH);
+            strncpy(users[threadnum].name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
             sprintf(msg_send->content, "%s is accepted.", msg_recv->name);
             //need unlock
-            send(connfd, msg_send, length, 0);
-            //testend
+            send(connfd, sendline, length, 0);
+        }
+        if(msg_recv->flags == MSG_EVERYONE){
+        }
+        if(msg_recv->flags == MSG_SPECFIC){
+        }
+        if(msg_recv->flags == MSG_LIST){
+            int i, usernum;
+            unsigned char (*listp)[MSG_MAX_NAME_LENGTH + 1] = msg_send->list;
+            msg_send->flags = MSG_LIST;
+            //need lock
+            for(i = 0, usernum = 0;i < MAX_ONLINE;i++){
+                if(users[i].used == USER_USED){
+                    strncpy(listp[usernum++], users[i].name, MSG_MAX_NAME_LENGTH);
+                    printf("%s added.\n", users[i].name);
+                }
+            }
+            msg_send->name[0] = usernum;
+            //need unlock
+            send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
+            sprintf(msg_send->content, "second send");
+            send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
         }
     }
     //close socket of the server
