@@ -36,7 +36,7 @@ int main()
     refresh();
 
     /* Setup for chatting */
-    wsetscrreg(my_wins[0], 1, LINES - 5);
+    wsetscrreg(my_wins[0], 0, LINES - 5);
     scrollok(my_wins[0], TRUE);
 	while(1)
 	{	
@@ -57,7 +57,7 @@ int main()
 void init_wins(WINDOW **wins)
 {
     char str[90];
-	wins[0] = newwin(LINES - 5, COLS, 0, 0);
+	wins[0] = newwin(LINES - 4, COLS, 0, 0);
     wattron(wins[0], COLOR_PAIR(1));
 	wprintw(wins[0], "Help: \n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"@someone <message>\" \tSend a private message to someone.\n");
 	wattroff(wins[0], COLOR_PAIR(1));
