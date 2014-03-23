@@ -22,6 +22,9 @@ struct users{
     pthread_t send_thread;//send message to client initiatively
     unsigned char name[MSG_MAX_NAME_LENGTH + 1];
     unsigned char used;//whether this thread is used or not
+    struct msg_server_to_client_not_list msg;
+    pthread_mutex_t msg_mutex;
+    pthread_cond_t msg_cond;
 }users[MAX_ONLINE + 1];//one for sending error message.
 
 struct thread_data{
@@ -32,25 +35,36 @@ struct thread_data{
 void *recv_thread_work(void *arg)
 {
     struct thread_data *mydata = (struct thread_data *)arg;
-    int connfd = mydata->connfd, threadnum = mydata->threadnum, length ,testnum = 0;
+    int connfd = mydata->connfd, threadnum = mydata->threadnum, i;
+    struct users *myuser = &users[threadnum];
     unsigned char recvline[MAXLINE],sendline[MAXLINE];
-    struct msg_client_to_server *msg_recv;
-    struct msg_server_to_client *msg_send;
-    printf("Thread created..\n");
-    while((length = recv(connfd, recvline, MAXLINE, 0)) == MSG_CLI_SRV_LENGTH){
+    struct msg_client_to_server *msg_recv = (struct msg_client_to_server *)recvline;
+    struct msg_server_to_client *msg_send = (struct msg_server_to_client *)sendline;
+    //printf("Thread created..\n");
+    while(recv(connfd, recvline, MAXLINE, 0) == MSG_CLI_SRV_LENGTH){
         memset(sendline, 0, MAXLINE);
         printf("String received from a client.\n");
-        msg_recv = (struct msg_client_to_server *)recvline;
-        msg_send = (struct msg_server_to_client *)sendline;
         if(msg_recv->flags == MSG_LOGIN){
             msg_send->flags = MSG_ANNOUNCE;
             //need lock
-            strncpy(users[threadnum].name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
+            strncpy(myuser->name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
             sprintf(msg_send->content, "%s is accepted.", msg_recv->name);
             //need unlock
-            send(connfd, sendline, length, 0);
+            send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
         if(msg_recv->flags == MSG_EVERYONE){
+            for(i = 0;i <= MAX_ONLINE;i++){
+                //need lock
+                if(users[i].used == USER_USED){
+                    pthread_mutex_lock(&users[i].msg_mutex);
+                    memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
+                    printf("signal %d.", users[i].name);
+                    pthread_cond_signal(&users[i].msg_cond);
+                    pthread_mutex_unlock(&users[i].msg_mutex);
+                    //usleep(100);
+                }
+                //need unlock
+            }
         }
         if(msg_recv->flags == MSG_SPECFIC){
         }
@@ -62,29 +76,59 @@ void *recv_thread_work(void *arg)
             for(i = 0, usernum = 0;i < MAX_ONLINE;i++){
                 if(users[i].used == USER_USED){
                     strncpy(listp[usernum++], users[i].name, MSG_MAX_NAME_LENGTH);
-                    printf("%s added.\n", users[i].name);
                 }
             }
             msg_send->name[0] = usernum;
             //need unlock
             send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
-            //sprintf(msg_send->content, "%d", testnum++);
-            usleep(100);
-            //send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
         }
     }
     //close socket of the server
+    printf("Close a connection from connfd=%d\n",connfd);
     close(connfd);
+
+    //exit send_thread
+    pthread_mutex_lock(&myuser->msg_mutex);
+    myuser->msg.flags = MSG_LOGOUT;
+    pthread_cond_signal(&myuser->msg_cond);
+    pthread_mutex_unlock(&myuser->msg_mutex);
+    
     //need lock
     memset(users[threadnum].name, 0, MSG_MAX_NAME_LENGTH);
     users[threadnum].used = USER_UNUSED;
     //need unlock
-
+    
     pthread_exit(NULL);
 }
 
 void *send_thread_work(void *arg)
 {
+    struct thread_data *mydata = (struct thread_data *)arg;
+    int connfd = mydata->connfd, threadnum = mydata->threadnum, testnum = 0;
+    struct users *myuser = &users[threadnum];
+    unsigned char sendline[MAXLINE];
+    struct msg_server_to_client *msg_send = (struct msg_server_to_client *)sendline;
+
+    pthread_mutex_lock(&myuser->msg_mutex);
+    while(1){
+        pthread_cond_wait(&myuser->msg_cond, &myuser->msg_mutex);
+        printf("%s is awaking.%d\n", myuser->name, testnum++);
+        if(myuser->msg.flags == MSG_EVERYONE){
+            msg_send->flags = MSG_EVERYONE;
+        }else if(myuser->msg.flags == MSG_SPECFIC){
+            msg_send->flags = MSG_SPECFIC;
+            strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
+        }else if(myuser->msg.flags == MSG_LOGOUT){
+            printf("%d send_thread exiting..\n", threadnum);
+            break;
+        }
+        strncpy(msg_send->content, myuser->msg.content, MSG_MAX_CONTENT_LENGTH);
+        send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+    }
+    pthread_mutex_unlock(&myuser->msg_mutex);
+    pthread_mutex_destroy(&myuser->msg_mutex);
+    pthread_cond_destroy(&myuser->msg_cond);
+
     pthread_exit(NULL);
 }
 
@@ -100,7 +144,7 @@ int main(int argc, char **argv)
     /*Initialize and set thread detached attribute */
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
+    
     //Create a socket for the soclet
     //If sockfd<0 there was error in the creation of the socket
     if((listenfd = socket (AF_INET, SOCK_STREAM, 0)) < 0){
@@ -125,12 +169,17 @@ int main(int argc, char **argv)
         //accpet a connection
         connfd = accept(listenfd, (struct sockaddr *) &cliaddr, &clilen);
 
-        printf("Received a request, creating thread...\n");
+        printf("Received a request,connfd=%d creating thread...\n", connfd);
 
         if(usernum < MAX_ONLINE){
             for(i = 0;i <= MAX_ONLINE && users[i].used != USER_UNUSED;i++);//find the first unused thread
+            /*Initial thread objects*/
             thread_dt[i].connfd = connfd;
             thread_dt[i].threadnum = i;
+            pthread_mutex_init(&users[i].msg_mutex, NULL); 
+            pthread_cond_init(&users[i].msg_cond, NULL);
+
+
             rc = pthread_create(&(users[i].recv_thread), &attr, recv_thread_work, (void *)&thread_dt[i]);
             rc1 = pthread_create(&(users[i].send_thread), &attr, send_thread_work, (void *)&thread_dt[i]);
             if(rc){

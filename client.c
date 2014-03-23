@@ -173,8 +173,7 @@ void *recv_print(void *arg)
     while(1)
     {
         if(recv(sockfd, recvline, MAXLINE, 0) == 0){
-            perror("The server terminated prematurely.\n");
-            exit(3);
+            wprintw(wins[0], "The server terminated prematurely.\n");
         }
         wprintw(wins[0], "Received a line from server: ");
         waddstr(wins[0], msg_recv->content);
@@ -198,7 +197,8 @@ void *send_input(void *arg)
         waiting_for_input(wins, buf);
         //wprintw(wins[0], "list\n");
         memset(sendline, 0, MAXLINE);
-        msg_send->flags = MSG_LIST;
+        msg_send->flags = MSG_EVERYONE;
+        strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
         send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
     }
     pthread_exit(NULL);

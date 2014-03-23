@@ -16,6 +16,7 @@
 #define MSG_LIST        2
 #define MSG_ANNOUNCE    3 //only for server_to_client
 #define MSG_LOGIN       4 //only for client_to_server
+#define MSG_LOGOUT      5 //only for client_to_server
 
 #define MSG_CLI_SRV_LENGTH 277
 struct msg_client_to_server{
