@@ -48,11 +48,12 @@ void *recv_thread_work(void *arg)
             msg_send->flags = MSG_ANNOUNCE;
             //need lock
             strncpy(myuser->name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
-            sprintf(msg_send->content, "%s is accepted.", msg_recv->name);
+            sprintf(msg_send->content, "%s is accepted.", myuser->name);
             //need unlock
             send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
         if(msg_recv->flags == MSG_EVERYONE){
+            strncpy(msg_recv->name, myuser->name, MSG_MAX_NAME_LENGTH);
             for(i = 0;i <= MAX_ONLINE;i++){
                 //need lock
                 if(users[i].used == USER_USED){
@@ -67,9 +68,24 @@ void *recv_thread_work(void *arg)
             }
         }
         if(msg_recv->flags == MSG_SPECFIC){
+            for(i = 0;i < MAX_ONLINE;i++){
+                if(users[i].used == USER_USED && (strcmp(users[i].name, msg_recv->name) == 0)){
+                    pthread_mutex_lock(&users[i].msg_mutex);
+                    memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
+                    strncpy(users[i].msg.name, myuser->name, MSG_MAX_NAME_LENGTH);
+                    printf("signal %d.", users[i].name);
+                    pthread_cond_signal(&users[i].msg_cond);
+                    pthread_mutex_unlock(&users[i].msg_mutex);
+                    break;
+                }
+            }
+            if(i == MAX_ONLINE){
+                msg_send->flags = MSG_ANNOUNCE;
+                sprintf(msg_send,"User %s not found!", msg_recv->name);
+            }
         }
         if(msg_recv->flags == MSG_LIST){
-            int i, usernum;
+            int usernum;
             unsigned char (*listp)[MSG_MAX_NAME_LENGTH + 1] = msg_send->list;
             msg_send->flags = MSG_LIST;
             //need lock
@@ -115,6 +131,7 @@ void *send_thread_work(void *arg)
         printf("%s is awaking.%d\n", myuser->name, testnum++);
         if(myuser->msg.flags == MSG_EVERYONE){
             msg_send->flags = MSG_EVERYONE;
+            strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
         }else if(myuser->msg.flags == MSG_SPECFIC){
             msg_send->flags = MSG_SPECFIC;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);

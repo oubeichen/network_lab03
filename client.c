@@ -18,6 +18,8 @@ struct thread_data{
     WINDOW **wins;
 };
 
+unsigned char name[MSG_MAX_NAME_LENGTH];
+
 void init_wins(WINDOW **);
 void print_label(WINDOW **);
 void *recv_print(void *);
@@ -35,7 +37,7 @@ int main(int argc, char **argv)
     int sockfd, rc;
     void *status;
     struct sockaddr_in servaddr;
-    unsigned char sendline[MAXLINE],buf[MAXLINE],name[MSG_MAX_NAME_LENGTH + 1];
+    unsigned char sendline[MAXLINE],buf[MAXLINE];
     struct msg_client_to_server *msg_send;
 
     srand((unsigned)time(NULL));//generate a random seed
@@ -141,7 +143,7 @@ void init_wins(WINDOW **wins)
     char str[90];
     wins[0] = newwin(LINES - 4, COLS, 0, 0);
     wattron(wins[0], COLOR_PAIR(1));
-    wprintw(wins[0], "Help: \n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"@someone <message>\" \tSend a private message to someone.\n");
+    wprintw(wins[0], "Help: \n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"[someone] some_message\" \tSend a private message to someone.\n");
     wattroff(wins[0], COLOR_PAIR(1));
     
     wins[1] = newwin(4, COLS, LINES - 5, 0);
@@ -175,9 +177,21 @@ void *recv_print(void *arg)
         if(recv(sockfd, recvline, MAXLINE, 0) == 0){
             wprintw(wins[0], "The server terminated prematurely.\n");
         }
-        wprintw(wins[0], "Received a line from server: ");
-        waddstr(wins[0], msg_recv->content);
-        waddch(wins[0], '\n');
+        if(msg_recv->flags == MSG_EVERYONE){
+            waddstr(wins[0], msg_recv->name);
+            waddstr(wins[0], " : ");
+            waddstr(wins[0], msg_recv->content);
+            waddch(wins[0], '\n');
+        }else if(msg_recv->flags == MSG_SPECFIC){
+            wattron(wins[0], COLOR_PAIR(3));
+            waddstr(wins[0], msg_recv->name);
+            waddstr(wins[0], " : [");
+            waddstr(wins[0], name);
+            waddch(wins[0], ']');
+            waddstr(wins[0], msg_recv->content);
+            waddch(wins[0], '\n');
+            wattroff(wins[0], COLOR_PAIR(3));
+        }
         update_panels();
         doupdate();
     }
@@ -196,10 +210,33 @@ void *send_input(void *arg)
     {
         waiting_for_input(wins, buf);
         //wprintw(wins[0], "list\n");
-        memset(sendline, 0, MAXLINE);
-        msg_send->flags = MSG_EVERYONE;
-        strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
-        send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+        if(buf[0] == '['){
+            int i;
+            for(i = 1;i < MSG_MAX_NAME_LENGTH + 1 && buf[i] != ']';i++){
+                msg_send->name[i - 1] = buf[i];
+            }
+            if(buf[i] == ']'){// if not then use later words as content
+                i++;
+            }
+            strncpy(msg_send->content, buf + i, MSG_MAX_CONTENT_LENGTH);
+            msg_send->flags = MSG_SPECFIC;
+            send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+            wattron(wins[0], COLOR_PAIR(3));
+            waddstr(wins[0], name);
+            waddstr(wins[0], " : [");
+            waddstr(wins[0], msg_send->name);
+            waddch(wins[0], ']');
+            waddstr(wins[0], msg_send->content);
+            waddch(wins[0], '\n');
+            wattroff(wins[0], COLOR_PAIR(3));
+        }else{
+            memset(sendline, 0, MAXLINE);
+            msg_send->flags = MSG_EVERYONE;
+            strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
+            send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+        }
+        update_panels();
+        doupdate();
     }
     pthread_exit(NULL);
 }
