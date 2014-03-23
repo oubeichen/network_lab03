@@ -6,9 +6,9 @@
 #include<string.h>
 #include<time.h>
 #include<pthread.h>
-#include <panel.h>
+#include<panel.h>
 
-#include"message.h"
+#include"protocol.h"
 
 #define MAXLINE 4096 /*max text line length*/
 #define SERV_PORT 6566 /*server port*/
@@ -30,8 +30,10 @@ int main(int argc, char **argv)
     PANEL  *my_panels[2];
     PANEL  *top;
     pthread_t recv_thread,send_thread;
+    pthread_attr_t attr;
     struct thread_data tdata;
-    int sockfd;
+    int sockfd, rc;
+    void *status;
     struct sockaddr_in servaddr;
     unsigned char sendline[MAXLINE],buf[MAXLINE],name[MSG_MAX_NAME_LENGTH + 1];
     struct msg_client_to_server *msg_send;
@@ -107,6 +109,9 @@ int main(int argc, char **argv)
             sprintf(name, "user%d", rand());
         }
         wprintw(my_wins[0], "Your name is:%s \n", name);
+        update_panels();
+        doupdate();
+
         msg_send = (struct msg_client_to_server *)sendline;
         msg_send->flags = 4;//login
         strncpy(msg_send->name, name, MSG_MAX_NAME_LENGTH + 1);
@@ -115,8 +120,17 @@ int main(int argc, char **argv)
         
         tdata.sockfd = sockfd;
         tdata.wins = my_wins;
-        pthread_create(&recv_thread, NULL, recv_print, (void *)&tdata);
-        pthread_create(&send_thread, NULL, send_input, (void *)&tdata);
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+        pthread_create(&recv_thread, &attr, recv_print, (void *)&tdata);
+        pthread_create(&send_thread, &attr, send_input, (void *)&tdata);
+
+        pthread_attr_destroy(&attr);
+        rc = pthread_join(send_thread, &status);
+        if(rc){
+            wprintf("ERROR: return code from pthread_join() is %d\n", rc);
+        }
+        wprintf("Logout successful.\n");
     }
     endwin();
     pthread_exit(NULL);
@@ -154,14 +168,19 @@ void *recv_print(void *arg)
     struct msg_server_to_client *msg_recv;
     int sockfd = ((struct thread_data *)arg)->sockfd;
     WINDOW **wins = ((struct thread_data *)arg)->wins;
+
+    msg_recv = (struct msg_server_to_client *)recvline;
     while(1)
     {
         if(recv(sockfd, recvline, MAXLINE, 0) == 0){
             perror("The server terminated prematurely.\n");
             exit(3);
         }
-        msg_recv = (struct msg_server_to_client *)recvline;
-        wprintw(wins[0], "Received a line from server: %s\n", msg_recv->content);
+        wprintw(wins[0], "Received a line from server: ");
+        waddstr(wins[0], msg_recv->content);
+        waddch(wins[0], '\n');
+        update_panels();
+        doupdate();
     }
     pthread_exit(NULL);
 }
@@ -172,15 +191,17 @@ void *send_input(void *arg)
     struct msg_client_to_server *msg_send;
     int sockfd = ((struct thread_data *)arg)->sockfd;
     WINDOW **wins = ((struct thread_data *)arg)->wins;
+    
+    msg_send = (struct msg_client_to_server *)sendline;
     while(1)//chat loop
     {
         waiting_for_input(wins, buf);
-        wprintw(wins[0], "list\n");
+        //wprintw(wins[0], "list\n");
         memset(sendline, 0, MAXLINE);
         msg_send->flags = MSG_LIST;
         send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
     }
-
+    pthread_exit(NULL);
 }
 
 void waiting_for_input(WINDOW **wins, char *buf)

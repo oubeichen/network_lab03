@@ -7,7 +7,7 @@
 #include<time.h>
 #include<pthread.h>
 
-#include"message.h"
+#include"protocol.h"
 
 #define MAXLINE 4096 /*max text line length*/
 #define SERV_PORT 6566 /*port*/
@@ -15,10 +15,11 @@
 
 #define USER_UNUSED 0
 #define USER_USED 1
-int usernum;
 
+int usernum;
 struct users{
-    pthread_t thread;
+    pthread_t recv_thread;//receive messages from client and work
+    pthread_t send_thread;//send message to client initiatively
     unsigned char name[MSG_MAX_NAME_LENGTH + 1];
     unsigned char used;//whether this thread is used or not
 }users[MAX_ONLINE + 1];//one for sending error message.
@@ -28,10 +29,10 @@ struct thread_data{
     int threadnum;
 };
 
-void *user_work(void *arg)
+void *recv_thread_work(void *arg)
 {
     struct thread_data *mydata = (struct thread_data *)arg;
-    int connfd = mydata->connfd, threadnum = mydata->threadnum, length;
+    int connfd = mydata->connfd, threadnum = mydata->threadnum, length ,testnum = 0;
     unsigned char recvline[MAXLINE],sendline[MAXLINE];
     struct msg_client_to_server *msg_recv;
     struct msg_server_to_client *msg_send;
@@ -67,8 +68,9 @@ void *user_work(void *arg)
             msg_send->name[0] = usernum;
             //need unlock
             send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
-            sprintf(msg_send->content, "second send");
-            send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
+            //sprintf(msg_send->content, "%d", testnum++);
+            usleep(100);
+            //send(connfd, sendline, 1 + (MSG_MAX_NAME_LENGTH + 1) + usernum * (MSG_MAX_NAME_LENGTH + 1), 0);
         }
     }
     //close socket of the server
@@ -81,10 +83,15 @@ void *user_work(void *arg)
     pthread_exit(NULL);
 }
 
+void *send_thread_work(void *arg)
+{
+    pthread_exit(NULL);
+}
+
 int main(int argc, char **argv)
 {
     pthread_attr_t attr;
-    int listenfd, connfd, rc;
+    int listenfd, connfd, rc, rc1;
     int i;
     socklen_t clilen;
     struct sockaddr_in cliaddr, servaddr;
@@ -124,7 +131,8 @@ int main(int argc, char **argv)
             for(i = 0;i <= MAX_ONLINE && users[i].used != USER_UNUSED;i++);//find the first unused thread
             thread_dt[i].connfd = connfd;
             thread_dt[i].threadnum = i;
-            rc = pthread_create(&(users[i].thread), &attr, user_work, (void *)&thread_dt[i]);
+            rc = pthread_create(&(users[i].recv_thread), &attr, recv_thread_work, (void *)&thread_dt[i]);
+            rc1 = pthread_create(&(users[i].send_thread), &attr, send_thread_work, (void *)&thread_dt[i]);
             if(rc){
                 printf("ERROR: return code from pthread_create() is %d\n", rc);
             }else{
@@ -132,8 +140,6 @@ int main(int argc, char **argv)
                 usernum++;
             }
         }
-        //pthread_t tt;
-        //pthread_create(&tt, NULL, user_work, (void *)connfd);
 
     }
     pthread_exit(NULL);

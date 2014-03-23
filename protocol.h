@@ -2,8 +2,8 @@
  * This headfile is to define the message format between clients and servers. 
  */
 
-#ifndef __MESSAGE_H__
-#define __MESSAGE_H__
+#ifndef __PROTOCOL_H__
+#define __PROTOCOL_H__
 
 #define MSG_MAX_CONTENT_LENGTH 255
 #define MSG_MAX_NAME_LENGTH 20
@@ -33,4 +33,9 @@ struct msg_server_to_client{
     };
 };
 
+struct msg_server_to_client_not_list{
+    unsigned char flags;//now only one flag.
+    unsigned char name[MSG_MAX_NAME_LENGTH + 1]; /*send_to or online_user_num for the first char(byte).*/
+    unsigned char content[MSG_MAX_CONTENT_LENGTH + 1];
+};
 #endif
