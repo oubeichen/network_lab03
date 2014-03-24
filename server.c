@@ -43,13 +43,24 @@ void *recv_thread_work(void *arg)
     //printf("Thread created..\n");
     while(recv(connfd, recvline, MAXLINE, 0) == MSG_CLI_SRV_LENGTH){
         memset(sendline, 0, MAXLINE);
-        printf("String received from a client.\n");
         if(msg_recv->flags == MSG_LOGIN){
-            msg_send->flags = MSG_ANNOUNCE;
-            //need lock
-            strncpy(myuser->name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
-            sprintf(msg_send->content, "%s is accepted.", myuser->name);
-            //need unlock
+            printf("%s is attempting to login.\n", msg_recv->name);
+            for(i = 0;i < MAX_ONLINE;i++){
+                if(users[i].used == USER_USED && strcmp(msg_recv->name, users[i].name) == 0)
+                    break;
+            }
+            if(i == MAX_ONLINE){
+                msg_send->flags = MSG_LOGIN_SUCCEED;
+                //need lock
+                strncpy(myuser->name, msg_recv->name, MSG_MAX_NAME_LENGTH + 1);
+                sprintf(msg_send->content, "%s is accepted.", myuser->name);
+                printf("%s loged in.\n", myuser->name);
+                //need unlock
+            }else{
+                msg_send->flags = MSG_LOGIN_FAILED;
+                sprintf(msg_send->content, "%s is already used.", msg_recv->name);
+                printf("%s is already used.\n", msg_recv->name);
+            }
             send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
         if(msg_recv->flags == MSG_EVERYONE){
@@ -59,7 +70,7 @@ void *recv_thread_work(void *arg)
                 if(users[i].used == USER_USED){
                     pthread_mutex_lock(&users[i].msg_mutex);
                     memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
-                    printf("signal %d.", users[i].name);
+                    printf("%s send a message to %s.\n",msg_recv->name , users[i].name);
                     pthread_cond_signal(&users[i].msg_cond);
                     pthread_mutex_unlock(&users[i].msg_mutex);
                     //usleep(100);
@@ -73,7 +84,7 @@ void *recv_thread_work(void *arg)
                     pthread_mutex_lock(&users[i].msg_mutex);
                     memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
                     strncpy(users[i].msg.name, myuser->name, MSG_MAX_NAME_LENGTH);
-                    printf("signal %d.", users[i].name);
+                    printf("signal %s.", users[i].name);
                     pthread_cond_signal(&users[i].msg_cond);
                     pthread_mutex_unlock(&users[i].msg_mutex);
                     break;
@@ -81,7 +92,13 @@ void *recv_thread_work(void *arg)
             }
             if(i == MAX_ONLINE){
                 msg_send->flags = MSG_ANNOUNCE;
-                sprintf(msg_send,"User %s not found!", msg_recv->name);
+                sprintf(msg_send->content,"User %s not found!", msg_recv->name);
+                send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+            }else{
+                msg_send->flags = MSG_SPECFIC_REPLY;
+                strncpy(msg_send->name, msg_recv->name, MSG_MAX_NAME_LENGTH);
+                strncpy(msg_send->content, msg_recv->content, MSG_MAX_CONTENT_LENGTH);
+                send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
             }
         }
         if(msg_recv->flags == MSG_LIST){

@@ -11,12 +11,15 @@
 #define MAX_ONLINE 150 /*maximum number of online clients*/
 
 /*flags of both client_to_server and server_to_client message*/
-#define MSG_EVERYONE    0
-#define MSG_SPECFIC     1
-#define MSG_LIST        2
-#define MSG_ANNOUNCE    3 //only for server_to_client
-#define MSG_LOGIN       4 //only for client_to_server
-#define MSG_LOGOUT      5 //only for client_to_server
+#define MSG_EVERYONE        0
+#define MSG_SPECFIC         1
+#define MSG_SPECFIC_REPLY   2 //only for server_to_client
+#define MSG_LIST            3
+#define MSG_ANNOUNCE        4 //only for server_to_client
+#define MSG_LOGIN           5 //only for client_to_server
+#define MSG_LOGIN_SUCCEED   6 //only for server_to_client
+#define MSG_LOGIN_FAILED    7 //only for server_to_client
+#define MSG_LOGOUT          8 //only for client_to_server
 
 #define MSG_CLI_SRV_LENGTH 277
 struct msg_client_to_server{

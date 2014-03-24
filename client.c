@@ -34,11 +34,12 @@ int main(int argc, char **argv)
     pthread_t recv_thread,send_thread;
     pthread_attr_t attr;
     struct thread_data tdata;
-    int sockfd, rc;
+    int sockfd, rc, second_launch = 0;
     void *status;
     struct sockaddr_in servaddr;
-    unsigned char sendline[MAXLINE],buf[MAXLINE];
+    unsigned char sendline[MAXLINE], recvline[MAXLINE], buf[MAXLINE];
     struct msg_client_to_server *msg_send;
+    struct msg_server_to_client *msg_recv;
 
     srand((unsigned)time(NULL));//generate a random seed
 
@@ -74,8 +75,21 @@ int main(int argc, char **argv)
     /* Setup for windows end*/
 
     while(1){//main loop
+        //inital input window
+        box(my_wins[1], 0, 0);
+        wattron(my_wins[1], COLOR_PAIR(2));
+        strcpy(buf, "Welcome to oubeichen's chatroom.Please enter a name.");
+        mvwprintw(my_wins[1], 0, (COLS - strlen(buf)) / 2, buf);
+        wattroff(my_wins[1], COLOR_PAIR(2));
+        refresh();
+        update_panels();
+        doupdate();
+
+        //Input a name to login
         waiting_for_input(my_wins, buf);
         
+        wattron(my_wins[0], COLOR_PAIR(2));
+
         //Create a socket for the client
         //If sockfd<0 there was an error in the creation of the socket
         if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
@@ -102,7 +116,7 @@ int main(int argc, char **argv)
             wprintw(my_wins[0], "Problem in connecting to the server\n");
             continue;
         }
-        
+
         //Login
         if(buf[strlen(buf) - 1] == '\n')
             buf[strlen(buf) - 1] = '\0';
@@ -111,15 +125,32 @@ int main(int argc, char **argv)
             sprintf(name, "user%d", rand());
         }
         wprintw(my_wins[0], "Your name is:%s \n", name);
-        update_panels();
-        doupdate();
-
         msg_send = (struct msg_client_to_server *)sendline;
-        msg_send->flags = 4;//login
+        msg_send->flags = MSG_LOGIN;//login
         strncpy(msg_send->name, name, MSG_MAX_NAME_LENGTH + 1);
         strncpy(msg_send->content, "Login message.", MSG_MAX_NAME_LENGTH);
         send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
-        
+
+        msg_recv = (struct msg_server_to_client *)recvline;
+        if(recv(sockfd, recvline, MAXLINE, 0) == 0){
+            wprintw(my_wins[0], "Login failed due to network.\n");
+            continue;
+        }
+        if(msg_recv->flags == MSG_LOGIN_SUCCEED){
+            wprintw(my_wins[0], "Login succeed:%s\n", msg_recv->content);
+        }else if(msg_recv->flags == MSG_LOGIN_FAILED){
+            wprintw(my_wins[0], "Login failed:%s\n", msg_recv->content);
+            continue;
+        }else{
+            wprintw(my_wins[0], "Unknown issues during login:%s\n", msg_recv->content);
+            continue;
+        }
+        update_panels();
+        doupdate();
+
+        wattroff(my_wins[0], COLOR_PAIR(2));
+
+        //create two thread for sending and receiving
         tdata.sockfd = sockfd;
         tdata.wins = my_wins;
         pthread_attr_init(&attr);
@@ -128,11 +159,14 @@ int main(int argc, char **argv)
         pthread_create(&send_thread, &attr, send_input, (void *)&tdata);
 
         pthread_attr_destroy(&attr);
-        rc = pthread_join(send_thread, &status);
+        rc = pthread_join(recv_thread, &status);
         if(rc){
             wprintf("ERROR: return code from pthread_join() is %d\n", rc);
         }
-        wprintf("Logout successful.\n");
+        pthread_cancel(send_thread);
+        wprintf(my_wins[0], "Logout successful.\n");
+        update_panels();
+        doupdate();
     }
     endwin();
     pthread_exit(NULL);
@@ -140,20 +174,12 @@ int main(int argc, char **argv)
 /* Put all the windows */
 void init_wins(WINDOW **wins)
 {
-    char str[90];
     wins[0] = newwin(LINES - 4, COLS, 0, 0);
     wattron(wins[0], COLOR_PAIR(1));
     wprintw(wins[0], "Help: \n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"[someone] some_message\" \tSend a private message to someone.\n");
     wattroff(wins[0], COLOR_PAIR(1));
     
     wins[1] = newwin(4, COLS, LINES - 5, 0);
-    box(wins[1], 0, 0);
-    wattron(wins[1], COLOR_PAIR(2));
-
-    strcpy(str, "Welcome to oubeichen's chatroom.Please enter a name.");
-    mvwprintw(wins[1], 0, (COLS - strlen(str)) / 2, str);
-    wattroff(wins[1], COLOR_PAIR(2));
-    refresh();
 }
 
 void print_label(WINDOW **wins)
@@ -168,30 +194,46 @@ void *recv_print(void *arg)
 {
     unsigned char recvline[MAXLINE];
     struct msg_server_to_client *msg_recv;
-    int sockfd = ((struct thread_data *)arg)->sockfd;
+    int sockfd = ((struct thread_data *)arg)->sockfd, i;
     WINDOW **wins = ((struct thread_data *)arg)->wins;
 
     msg_recv = (struct msg_server_to_client *)recvline;
     while(1)
     {
         if(recv(sockfd, recvline, MAXLINE, 0) == 0){
-            wprintw(wins[0], "The server terminated prematurely.\n");
+            break;
         }
         if(msg_recv->flags == MSG_EVERYONE){
             waddstr(wins[0], msg_recv->name);
             waddstr(wins[0], " : ");
             waddstr(wins[0], msg_recv->content);
-            waddch(wins[0], '\n');
         }else if(msg_recv->flags == MSG_SPECFIC){
             wattron(wins[0], COLOR_PAIR(3));
-            waddstr(wins[0], msg_recv->name);
-            waddstr(wins[0], " : [");
-            waddstr(wins[0], name);
-            waddch(wins[0], ']');
-            waddstr(wins[0], msg_recv->content);
-            waddch(wins[0], '\n');
+            wprintw(wins[0], "%s : [%s]%s", msg_recv->name, name, msg_recv->content);
             wattroff(wins[0], COLOR_PAIR(3));
+        }else if(msg_recv->flags == MSG_SPECFIC_REPLY){
+            wattron(wins[0], COLOR_PAIR(3));
+            wprintw(wins[0], "%s : [%s]%s", name, msg_recv->name, msg_recv->content);
+            wattroff(wins[0], COLOR_PAIR(3));
+        }else if(msg_recv->flags == MSG_ANNOUNCE){
+            wattron(wins[0], COLOR_PAIR(2));
+            waddstr(wins[0], msg_recv->content);
+            wattroff(wins[0], COLOR_PAIR(2));
+        }else if(msg_recv->flags == MSG_LIST){
+            wattron(wins[0], COLOR_PAIR(4));
+            waddstr(wins[0], "Online users are: ");
+            wattroff(wins[0], COLOR_PAIR(4));
+            waddstr(wins[0], "|");
+            wattron(wins[0], COLOR_PAIR(4));
+            for(i = 0;i < msg_recv->name[0];i++){
+                waddstr(wins[0], msg_recv->list[i]);
+                wattroff(wins[0], COLOR_PAIR(4));
+                waddstr(wins[0], "|");
+                wattron(wins[0], COLOR_PAIR(4));
+            }
+            wattroff(wins[0], COLOR_PAIR(4));
         }
+        waddch(wins[0], '\n');
         update_panels();
         doupdate();
     }
@@ -215,29 +257,29 @@ void *send_input(void *arg)
             for(i = 1;i < MSG_MAX_NAME_LENGTH + 1 && buf[i] != ']';i++){
                 msg_send->name[i - 1] = buf[i];
             }
+            msg_send->name[i - 1] = '\0';//avoid issue
             if(buf[i] == ']'){// if not then use later words as content
                 i++;
             }
             strncpy(msg_send->content, buf + i, MSG_MAX_CONTENT_LENGTH);
             msg_send->flags = MSG_SPECFIC;
-            send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
-            wattron(wins[0], COLOR_PAIR(3));
-            waddstr(wins[0], name);
-            waddstr(wins[0], " : [");
-            waddstr(wins[0], msg_send->name);
-            waddch(wins[0], ']');
-            waddstr(wins[0], msg_send->content);
-            waddch(wins[0], '\n');
-            wattroff(wins[0], COLOR_PAIR(3));
+        }else if(buf[0] == ':' && strcmp(buf + 1, "list") == 0){
+            msg_send->flags = MSG_LIST;
+        }else if(buf[0] == ':' && strcmp(buf + 1, "logout") == 0){
+            break;
         }else{
             memset(sendline, 0, MAXLINE);
             msg_send->flags = MSG_EVERYONE;
             strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
-            send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+        }
+        if(send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0) < MSG_CLI_SRV_LENGTH){
+            wprintw(wins[0], "The server terminated prematurely.\n");
+            break;
         }
         update_panels();
         doupdate();
     }
+    shutdown(sockfd, SHUT_RDWR);
     pthread_exit(NULL);
 }
 
