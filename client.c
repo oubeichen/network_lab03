@@ -21,6 +21,7 @@ struct thread_data{
 unsigned char name[MSG_MAX_NAME_LENGTH];
 
 void init_wins(WINDOW **);
+void show_help(WINDOW **);
 void print_label(WINDOW **);
 void *recv_print(void *);
 void *send_input(void *);
@@ -138,6 +139,7 @@ int main(int argc, char **argv)
         }
         if(msg_recv->flags == MSG_LOGIN_SUCCEED){
             wprintw(my_wins[0], "Login succeed:%s\n", msg_recv->content);
+            show_help(my_wins);
         }else if(msg_recv->flags == MSG_LOGIN_FAILED){
             wprintw(my_wins[0], "Login failed:%s\n", msg_recv->content);
             continue;
@@ -176,11 +178,14 @@ int main(int argc, char **argv)
 void init_wins(WINDOW **wins)
 {
     wins[0] = newwin(LINES - 4, COLS, 0, 0);
-    wattron(wins[0], COLOR_PAIR(1));
-    wprintw(wins[0], "Help: \n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"[someone] some_message\" \tSend a private message to someone.\n");
-    wattroff(wins[0], COLOR_PAIR(1));
-    
     wins[1] = newwin(4, COLS, LINES - 5, 0);
+}
+
+void show_help(WINDOW **wins)
+{
+    wattron(wins[0], COLOR_PAIR(1));
+    wprintw(wins[0], "Command: \n\":help\" \t\tShow command help.\n\":list\" \t\tList online users.\n\":logout\" \t\tLog out.\n\"[someone] some msg\" \tSend a private message to someone.\n\":exit\" \t\tExit chatroom.\n");
+    wattroff(wins[0], COLOR_PAIR(1));
 }
 
 void print_label(WINDOW **wins)
@@ -251,6 +256,8 @@ void *send_input(void *arg)
     msg_send = (struct msg_client_to_server *)sendline;
     while(1)//chat loop
     {
+        update_panels();
+        doupdate();
         waiting_for_input(wins, buf);
         //wprintw(wins[0], "list\n");
         if(buf[0] == '['){
@@ -264,11 +271,17 @@ void *send_input(void *arg)
             }
             strncpy(msg_send->content, buf + i, MSG_MAX_CONTENT_LENGTH);
             msg_send->flags = MSG_SPECFIC;
+        }else if(buf[0] == ':' && strcmp(buf + 1, "help") == 0){
+            show_help(wins);
+            continue;
+        }else if(buf[0] == ':' && strcmp(buf + 1, "exit") == 0){
+            endwin();
+            exit(0);
         }else if(buf[0] == ':' && strcmp(buf + 1, "list") == 0){
             msg_send->flags = MSG_LIST;
         }else if(buf[0] == ':' && strcmp(buf + 1, "logout") == 0){
             break;
-        }else{
+        }else{//not match
             memset(sendline, 0, MAXLINE);
             msg_send->flags = MSG_EVERYONE;
             strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
@@ -277,8 +290,6 @@ void *send_input(void *arg)
             wprintw(wins[0], "Sending error.\n");
             break;
         }
-        update_panels();
-        doupdate();
     }
     shutdown(sockfd, SHUT_RDWR);
     pthread_exit(NULL);

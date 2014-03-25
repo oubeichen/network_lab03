@@ -154,7 +154,6 @@ void *send_thread_work(void *arg)
             msg_send->flags = MSG_SPECFIC;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
         }else if(myuser->msg.flags == MSG_LOGOUT){
-            printf("%s send_thread exiting..\n", myuser->name);
             break;
         }
         strncpy(msg_send->content, myuser->msg.content, MSG_MAX_CONTENT_LENGTH);
