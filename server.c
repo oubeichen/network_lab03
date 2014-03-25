@@ -64,13 +64,13 @@ void *recv_thread_work(void *arg)
             send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
         if(msg_recv->flags == MSG_EVERYONE){
+            printf("%s send a message to everyone.\n",myuser->name);
             strncpy(msg_recv->name, myuser->name, MSG_MAX_NAME_LENGTH);
             for(i = 0;i <= MAX_ONLINE;i++){
                 //need lock
                 if(users[i].used == USER_USED){
                     pthread_mutex_lock(&users[i].msg_mutex);
                     memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
-                    printf("%s send a message to %s.\n",msg_recv->name , users[i].name);
                     pthread_cond_signal(&users[i].msg_cond);
                     pthread_mutex_unlock(&users[i].msg_mutex);
                     //usleep(100);
@@ -79,12 +79,12 @@ void *recv_thread_work(void *arg)
             }
         }
         if(msg_recv->flags == MSG_SPECFIC){
+            printf("%s send a message to %s\n", myuser->name, msg_recv->name);
             for(i = 0;i < MAX_ONLINE;i++){
                 if(users[i].used == USER_USED && (strcmp(users[i].name, msg_recv->name) == 0)){
                     pthread_mutex_lock(&users[i].msg_mutex);
                     memcpy(&users[i].msg, &recvline, MSG_CLI_SRV_LENGTH);
                     strncpy(users[i].msg.name, myuser->name, MSG_MAX_NAME_LENGTH);
-                    printf("signal %s.", users[i].name);
                     pthread_cond_signal(&users[i].msg_cond);
                     pthread_mutex_unlock(&users[i].msg_mutex);
                     break;
@@ -93,6 +93,7 @@ void *recv_thread_work(void *arg)
             if(i == MAX_ONLINE){
                 msg_send->flags = MSG_ANNOUNCE;
                 sprintf(msg_send->content,"User %s not found!", msg_recv->name);
+                printf("User %s not found!\n", msg_recv->name);
                 send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
             }else{
                 msg_send->flags = MSG_SPECFIC_REPLY;
@@ -106,6 +107,7 @@ void *recv_thread_work(void *arg)
             unsigned char (*listp)[MSG_MAX_NAME_LENGTH + 1] = msg_send->list;
             msg_send->flags = MSG_LIST;
             //need lock
+            printf("%s wants the online user list.\n", myuser->name);
             for(i = 0, usernum = 0;i < MAX_ONLINE;i++){
                 if(users[i].used == USER_USED){
                     strncpy(listp[usernum++], users[i].name, MSG_MAX_NAME_LENGTH);
@@ -117,7 +119,7 @@ void *recv_thread_work(void *arg)
         }
     }
     //close socket of the server
-    printf("Close a connection from connfd=%d\n",connfd);
+    printf("%s loged out.\n", myuser->name);
     close(connfd);
 
     //exit send_thread
@@ -145,7 +147,6 @@ void *send_thread_work(void *arg)
     pthread_mutex_lock(&myuser->msg_mutex);
     while(1){
         pthread_cond_wait(&myuser->msg_cond, &myuser->msg_mutex);
-        printf("%s is awaking.%d\n", myuser->name, testnum++);
         if(myuser->msg.flags == MSG_EVERYONE){
             msg_send->flags = MSG_EVERYONE;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
@@ -153,7 +154,7 @@ void *send_thread_work(void *arg)
             msg_send->flags = MSG_SPECFIC;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
         }else if(myuser->msg.flags == MSG_LOGOUT){
-            printf("%d send_thread exiting..\n", threadnum);
+            printf("%s send_thread exiting..\n", myuser->name);
             break;
         }
         strncpy(msg_send->content, myuser->msg.content, MSG_MAX_CONTENT_LENGTH);

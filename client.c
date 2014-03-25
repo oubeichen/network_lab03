@@ -81,7 +81,7 @@ int main(int argc, char **argv)
         strcpy(buf, "Welcome to oubeichen's chatroom.Please enter a name.");
         mvwprintw(my_wins[1], 0, (COLS - strlen(buf)) / 2, buf);
         wattroff(my_wins[1], COLOR_PAIR(2));
-        refresh();
+        //refresh();
         update_panels();
         doupdate();
 
@@ -163,8 +163,9 @@ int main(int argc, char **argv)
         if(rc){
             wprintf("ERROR: return code from pthread_join() is %d\n", rc);
         }
-        pthread_cancel(send_thread);
-        wprintf(my_wins[0], "Logout successful.\n");
+        pthread_cancel(send_thread);//avoid harmful issues
+        //pthread_join(send_thread, &status);
+        wprintw(my_wins[0], "Logout successful.\n");
         update_panels();
         doupdate();
     }
@@ -273,7 +274,7 @@ void *send_input(void *arg)
             strncpy(msg_send->content, buf, MSG_MAX_CONTENT_LENGTH);
         }
         if(send(sockfd, sendline, MSG_CLI_SRV_LENGTH, 0) < MSG_CLI_SRV_LENGTH){
-            wprintw(wins[0], "The server terminated prematurely.\n");
+            wprintw(wins[0], "Sending error.\n");
             break;
         }
         update_panels();
