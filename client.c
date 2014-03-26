@@ -213,11 +213,11 @@ void *recv_print(void *arg)
             waddstr(wins[0], msg_recv->name);
             waddstr(wins[0], " : ");
             waddstr(wins[0], msg_recv->content);
-        }else if(msg_recv->flags == MSG_SPECFIC){
+        }else if(msg_recv->flags == MSG_SPECIFIC){
             wattron(wins[0], COLOR_PAIR(3));
             wprintw(wins[0], "%s : [%s]%s", msg_recv->name, name, msg_recv->content);
             wattroff(wins[0], COLOR_PAIR(3));
-        }else if(msg_recv->flags == MSG_SPECFIC_REPLY){
+        }else if(msg_recv->flags == MSG_SPECIFIC_REPLY){
             wattron(wins[0], COLOR_PAIR(3));
             wprintw(wins[0], "%s : [%s]%s", name, msg_recv->name, msg_recv->content);
             wattroff(wins[0], COLOR_PAIR(3));
@@ -270,7 +270,7 @@ void *send_input(void *arg)
                 i++;
             }
             strncpy(msg_send->content, buf + i, MSG_MAX_CONTENT_LENGTH);
-            msg_send->flags = MSG_SPECFIC;
+            msg_send->flags = MSG_SPECIFIC;
         }else if(buf[0] == ':' && strcmp(buf + 1, "help") == 0){
             show_help(wins);
             continue;

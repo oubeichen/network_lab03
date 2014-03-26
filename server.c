@@ -105,7 +105,7 @@ void *recv_thread_work(void *arg)//receive and process messages
                 pthread_mutex_unlock(&users_status_mutex);
             }
         }
-        if(msg_recv->flags == MSG_SPECFIC){
+        if(msg_recv->flags == MSG_SPECIFIC){
             printf("%s send a message to %s.\n", myname, msg_recv->name);
             for(i = 0;i < MAX_ONLINE;i++){
                 pthread_mutex_lock(&users_status_mutex);
@@ -130,7 +130,7 @@ void *recv_thread_work(void *arg)//receive and process messages
                 printf("User %s not found!\n", msg_recv->name);
                 send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
             }else{
-                msg_send->flags = MSG_SPECFIC_REPLY;
+                msg_send->flags = MSG_SPECIFIC_REPLY;
                 strncpy(msg_send->name, msg_recv->name, MSG_MAX_NAME_LENGTH);
                 strncpy(msg_send->content, msg_recv->content, MSG_MAX_CONTENT_LENGTH);
                 send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
@@ -205,8 +205,8 @@ void *send_thread_work(void *arg)//send message from another user
         if(myuser->msg.flags == MSG_EVERYONE){
             msg_send->flags = MSG_EVERYONE;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
-        }else if(myuser->msg.flags == MSG_SPECFIC){
-            msg_send->flags = MSG_SPECFIC;
+        }else if(myuser->msg.flags == MSG_SPECIFIC){
+            msg_send->flags = MSG_SPECIFIC;
             strncpy(msg_send->name, myuser->msg.name, MSG_MAX_NAME_LENGTH);
         }else if(myuser->msg.flags == MSG_ANNOUNCE){
             msg_send->flags = MSG_ANNOUNCE;

@@ -12,8 +12,8 @@
 
 /*flags of both client_to_server and server_to_client message*/
 #define MSG_EVERYONE        0
-#define MSG_SPECFIC         1
-#define MSG_SPECFIC_REPLY   2 //only for server_to_client
+#define MSG_SPECIFIC         1
+#define MSG_SPECIFIC_REPLY   2 //only for server_to_client
 #define MSG_LIST            3
 #define MSG_ANNOUNCE        4 //only for server_to_client
 #define MSG_LOGIN           5 //only for client_to_server
