@@ -290,6 +290,7 @@ void *send_input(void *arg)
             wprintw(wins[0], "Sending error.\n");
             break;
         }
+        memset(sendline, 0, MAXLINE);//avoid issue
     }
     shutdown(sockfd, SHUT_RDWR);
     pthread_exit(NULL);
