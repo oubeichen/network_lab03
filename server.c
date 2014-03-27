@@ -52,7 +52,7 @@ void *recv_thread_work(void *arg)//receive and process messages
             for(i = 0;i < MAX_ONLINE;i++){
                 pthread_mutex_lock(&users_status_mutex);
                 pthread_mutex_lock(&users[i].name_mutex);
-                if(users[i].status == USER_USED && strcmp(msg_recv->name, users[i].name) == 0){
+                if(i != threadnum && users[i].status == USER_USED && strcmp(msg_recv->name, users[i].name) == 0){
                     pthread_mutex_unlock(&users[i].name_mutex);//unlock before break
                     pthread_mutex_unlock(&users_status_mutex);
                     break;
@@ -73,7 +73,7 @@ void *recv_thread_work(void *arg)//receive and process messages
                 //send announcement to everyone
                 for(i = 0;i < MAX_ONLINE;i++){
                     pthread_mutex_lock(&users_status_mutex);
-                    if(users[i].status == USER_USED){
+                    if(i != threadnum && users[i].status == USER_USED){
                         pthread_mutex_lock(&users[i].msg_mutex);
                         users[i].msg.flags = MSG_ANNOUNCE;
                         sprintf(users[i].msg.content, "%s logged in.", myname);
@@ -129,7 +129,7 @@ void *recv_thread_work(void *arg)//receive and process messages
                 sprintf(msg_send->content,"User %s not found!", msg_recv->name);
                 printf("User %s not found!\n", msg_recv->name);
                 send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
-            }else{
+            }else if(i != threadnum){
                 msg_send->flags = MSG_SPECIFIC_REPLY;
                 strncpy(msg_send->name, msg_recv->name, MSG_MAX_NAME_LENGTH);
                 strncpy(msg_send->content, msg_recv->content, MSG_MAX_CONTENT_LENGTH);
@@ -177,7 +177,7 @@ void *recv_thread_work(void *arg)//receive and process messages
     //send announcement to everyone
     for(i = 0;i < MAX_ONLINE;i++){
         pthread_mutex_lock(&users_status_mutex);
-        if(users[i].status == USER_USED){
+        if(i != threadnum && users[i].status == USER_USED){
             pthread_mutex_lock(&users[i].msg_mutex);
             users[i].msg.flags = MSG_ANNOUNCE;
             sprintf(users[i].msg.content, "%s logged out.", myname);
@@ -215,6 +215,7 @@ void *send_thread_work(void *arg)//send message from another user
         }
         strncpy(msg_send->content, myuser->msg.content, MSG_MAX_CONTENT_LENGTH);
         send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
+        memset(sendline, 0 ,MAXLINE);
     }
     pthread_mutex_unlock(&myuser->msg_mutex);
     pthread_mutex_destroy(&myuser->msg_mutex);
