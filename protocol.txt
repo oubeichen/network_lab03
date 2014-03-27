@@ -1,0 +1,59 @@
+oubeichen's Chatroom Protocol v0.1
+-----------------------------------
+此协议用于南京大学网络实验三“即时通讯软件编程实验”。
+协议和文档均处于初始阶段，最新修改请参考代码。
+
+1. 协议结构
+按顺序各个字段分别为：
+FLAGS 	1字节
+NAME 	20字节
+DATA	可扩展字节数
+
+解释：
+FLAGS	代表请求的服务类型
+NAME	服务中使用到的用户名，有时候作其他用途
+DATA	服务中使用到的数据
+
+2. 服务
+根据FLAGS取值的不同有如下几种服务
+MSG_EVERYONE        0
+MSG_SPECIFIC        1//private message
+MSG_SPECIFIC_REPLY  2
+MSG_LIST            3//list online users
+MSG_ANNOUNCE        4//announcement from the server
+MSG_LOGIN           5
+MSG_LOGIN_SUCCEED   6 
+MSG_LOGIN_FAILED    7 
+MSG_LOGOUT          8 
+
+其中MSG_SPECIFIC_REPLY MSG_ANNOUNCE MSG_LOGIN_SUCCEED MSG_LOGIN_FAILED仅为服务器端发送给客户端。
+MSG_LOGIN MSG_LOGOUT仅为客户端发送给服务器端。
+
+3.登录
+客户端发送MSG_LOGIN类型服务数据包给服务器端，其NAME字段为请求的名字。
+服务器收到并处理，若成功登录则返回MSG_LOGIN_SUCCEED数据包，并发送MSG_ANNOUNCE类型数据包给所有人，DATA字段为某用户注销的消息。
+否则返回MSG_LOGIN_FAILED数据包。
+客户端登录成功后则继续连接，登录失败则断开连接重新登陆。
+
+4.请求
+若没有提到某字段，则代表该字段可为任意内容
+
+	4.1 发送给所有人
+	客户端发送MSG_EVERYONE类型数据包给服务器端，其DATA字段为消息内容。
+	服务器收到后发送给所有在线用户，同样为MSG_EVERYONE类型，并且其NAME字段为消息来源人，DATA字段为消息内容。
+
+	4.2 发送给特定人
+	客户端发送MSG_SPECIFIC类型数据包给服务器端，其NAME字段为特定人，DATA字段为消息内容。
+	服务器收到后发给指定用户，同样为MSG_SPECIFIC类型，并且其NAME为消息来源人，DATA字段为消息内容。
+	处理完毕后若发送成功，则MSG_SPECIFIC_REPLY类型数据包返回给发送消息的用户，其内容与客户端发送的MSG_SPECIFIC一致。若不成功，则发送MSG_ANNOUNCE类型数据包给发送消息的用户，代表发送不成功的信息。 
+
+	4.3 查看在线列表
+	客户端发送MSG_LIST类型数据包给服务端。
+	服务器收到后返回MSG_LIST类型，其NAME字段的第一个字节代表在线用户总数，DATA字段每隔21个字节代表一个用户的名字（名字最长为20字节）。
+
+	4.4 注销
+	客户端发送MSG_LOGOUT类型数据包给服务端，并直接注销。
+	服务器收到后，发送MSG_ANNOUNCE类型数据包给所有人，DATA字段为某用户注销的消息。
+
+5. 作者联系方式
+oubeichen(at)gmail.com
