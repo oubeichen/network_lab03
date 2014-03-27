@@ -91,7 +91,7 @@ void *recv_thread_work(void *arg)//receive and process messages
             send(connfd, sendline, MSG_CLI_SRV_LENGTH, 0);
         }
         if(msg_recv->flags == MSG_EVERYONE){
-            printf("%s send a message to everyone.\n",myname);
+            printf("%s sends a message to everyone.\n",myname);
             strncpy(msg_recv->name, myname, MSG_MAX_NAME_LENGTH);
             for(i = 0;i <= MAX_ONLINE;i++){
                 pthread_mutex_lock(&users_status_mutex);
@@ -106,7 +106,7 @@ void *recv_thread_work(void *arg)//receive and process messages
             }
         }
         if(msg_recv->flags == MSG_SPECIFIC){
-            printf("%s send a message to %s.\n", myname, msg_recv->name);
+            printf("%s sends a message to %s.\n", myname, msg_recv->name);
             for(i = 0;i < MAX_ONLINE;i++){
                 pthread_mutex_lock(&users_status_mutex);
                 pthread_mutex_lock(&users[i].name_mutex);

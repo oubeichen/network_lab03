@@ -144,7 +144,7 @@ int main(int argc, char **argv)
             wprintw(my_wins[0], "Login failed:%s\n", msg_recv->content);
             continue;
         }else{
-            wprintw(my_wins[0], "Unknown issues during login:%s\n", msg_recv->content);
+            wprintw(my_wins[0], "Unknown issue during login:%s\n", msg_recv->content);
             continue;
         }
         update_panels();
